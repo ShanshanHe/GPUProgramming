@@ -129,7 +129,7 @@ __global__ void vector_max_kernel2(float *in, float *out, int N) {
     //grab the lead thread's value                                                                                                                         
     max = share[threadIdx.x];
 
-    //grab values from all other threads' locations                                                                                                        
+    //grab values from all other threads' locations                                                                                                       
     for(int i = 1; i < end; i++) {
 
       //if larger, replace                                                                                                                               
@@ -140,6 +140,45 @@ __global__ void vector_max_kernel2(float *in, float *out, int N) {
     out[block_id] = max;
 
   }
+}
+
+__global__ void vector_max_kernel3(float *in, float *out, int N) {
+
+    // Determine the "flattened" block id and thread id
+    int block_id = blockIdx.x + gridDim.x * blockIdx.y;
+    int thread_id = blockDim.x * block_id + threadIdx.x;
+    __shared__ int share[256];
+    share[threadIdx.x] = in[thread_id];
+    __syncthreads();
+
+    // A single "lead" thread in each block finds the maximum value over a range of size threads_per_block
+    float max = 0.0;
+    int round;
+    if(thread_id + threads_per_block > N)
+      round = 
+    round = log2(
+    if (threadIdx.x%2 == 0) {
+
+        //calculate out of bounds guard
+        //our block size will be 256, but our vector may not be a multiple of 256!
+        int end = threads_per_block;
+        if(thread_id + threads_per_block > N)
+            end = N - thread_id;
+
+        //grab the lead thread's value
+        max = share[threadIdx.x];
+
+        //grab values from all other threads' locations
+        
+                
+            //if larger, replace
+            if(max < share[threadIdx.x + 1])
+                max = share[threadIdx.x + 1];
+        }
+
+        out[block_id] = max;
+
+    }
 }
 
 
