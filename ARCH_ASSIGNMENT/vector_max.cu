@@ -118,7 +118,7 @@ __global__ void vector_max_kernel2(float *in, float *out, int N) {
   // Determine the "flattened" block id and thread id                                                                                                        
   int block_id = blockIdx.x + gridDim.x * blockIdx.y;
   int thread_id = blockDim.x * block_id + threadIdx.x;
-  __shared__ int share[256];
+  __shared__ float share[256];
   share[threadIdx.x] = in[thread_id];
   __syncthreads();
   // A single "lead" thread in each block finds the maximum value over a range of size threads_per_block                                                     
