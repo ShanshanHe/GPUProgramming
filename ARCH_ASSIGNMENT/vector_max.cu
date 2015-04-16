@@ -46,8 +46,8 @@ int main(int argc, char **argv) {
     // Generate a random vector
     // You can use "get_increasing_vector()" for debugging
     long long vector_start_time = start_timer();
-    //float *vec = get_random_vector(N);
-     float *vec = get_increasing_vector(N);
+    float *vec = get_random_vector(N);
+     //float *vec = get_increasing_vector(N);
     stop_timer(vector_start_time, "Vector generation");
 	
     // Compute the max on the GPU
@@ -152,7 +152,7 @@ __global__ void vector_max_kernel3(float *in, float *out, int N) {
     // Determine the "flattened" block id and thread id
     int block_id = blockIdx.x + gridDim.x * blockIdx.y;
     int thread_id = blockDim.x * block_id + threadIdx.x;
-    __shared__ int share[256];
+    __shared__ float share[256];
     share[threadIdx.x] = in[thread_id];
     __syncthreads();
 
