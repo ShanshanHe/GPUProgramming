@@ -2,7 +2,9 @@
 #include <sys/time.h>
 #include <cuda.h>
 #include <cfloat>
-
+#include <cmath>
+#include "cuPrintf.cuh"
+#include "cuPrintf.cu"
 //VERSION 1.4 MODIFIED 7/8 13:08 by Jack
 
 // The number of threads per blocks in the kernel
@@ -45,7 +47,7 @@ int main(int argc, char **argv) {
     // You can use "get_increasing_vector()" for debugging
     long long vector_start_time = start_timer();
     //float *vec = get_random_vector(N);
-    float *vec = get_increasing_vector(N);
+     float *vec = get_increasing_vector(N);
     stop_timer(vector_start_time, "Vector generation");
 	
     // Compute the max on the GPU
@@ -61,6 +63,9 @@ int main(int argc, char **argv) {
     // Free vector
     free(vec);
 
+    printf("GPU output %f, CPU output %f\n", result_GPU, result_CPU);
+
+
     // Compute the speedup or slowdown
     if (GPU_time > CPU_time) printf("\nCPU outperformed GPU by %.2fx\n", (float) GPU_time / (float) CPU_time);
     else                     printf("\nGPU outperformed CPU by %.2fx\n", (float) CPU_time / (float) GPU_time);
@@ -70,7 +75,7 @@ int main(int argc, char **argv) {
 	
     // Report the correctness results
     if(wrong) printf("GPU output %f did not match CPU output %f\n", result_GPU, result_CPU);
-        
+    // printf("GPU output %d, CPU output %d\n", result_GPU, result_CPU);
 }
 
 
@@ -129,7 +134,7 @@ __global__ void vector_max_kernel2(float *in, float *out, int N) {
     //grab the lead thread's value                                                                                                                         
     max = share[threadIdx.x];
 
-    //grab values from all other threads' locations                                                                                                        
+    //grab values from all other threads' locations                                                                                                       
     for(int i = 1; i < end; i++) {
 
       //if larger, replace                                                                                                                               
@@ -142,10 +147,55 @@ __global__ void vector_max_kernel2(float *in, float *out, int N) {
   }
 }
 
+__global__ void vector_max_kernel3(float *in, float *out, int N) {
+
+    // Determine the "flattened" block id and thread id
+    int block_id = blockIdx.x + gridDim.x * blockIdx.y;
+    int thread_id = blockDim.x * block_id + threadIdx.x;
+    __shared__ int share[256];
+    share[threadIdx.x] = in[thread_id];
+    __syncthreads();
+
+    // A single "lead" thread in each block finds the maximum value over a range of size threads_per_block
+    float max = 0.0;
+    int round;
+    // if(thread_id + threads_per_block > N)
+    //  round = 
+    round = log2(double(threads_per_block));
+    //    cuPrintf("round is %d\n", round);
+    for(int i = 1; i < round + 1; i++) {
+      __syncthreads();
+      if ((threadIdx.x%2) == 0 && threadIdx.x < threads_per_block/i) {
+	//	cuPrintf("round is %d\n", i);
+
+        //calculate out of bounds guard
+        //our block size will be 256, but our vector may not be a multiple of 256!
+      // int end = threads_per_block;
+      // if(thread_id + threads_per_block > N)
+      //    end = N - thread_id;
+
+        //grab the lead thread's value
+        max = share[threadIdx.x];
+
+        //grab values from all other threads' locations
+        
+                
+            //if larger, replace
+            if(max < share[threadIdx.x + 1])
+                max = share[threadIdx.x + 1];
+      
+    share[threadIdx.x/2] = max;
+      }
+      __syncthreads();
+    }
+        out[block_id] = share[0];
+
+    }
+
 
 // Returns the maximum value within a vector of length N
 float GPU_vector_max(float *in_CPU, int N, int kernel_code) {
-
+    
     int vector_size = N * sizeof(float);
 
     // Allocate CPU memory for the result
@@ -219,8 +269,23 @@ float GPU_vector_max(float *in_CPU, int N, int kernel_code) {
       //       die("KERNEL NOT IMPLEMENTED YET\n");
       // break;
    case 3 :
-        //LAUNCH KERNEL FROM PROBLEM 3 HERE
-        die("KERNEL NOT IMPLEMENTED YET\n");
+     cudaPrintfInit();
+     vector_max_kernel3 <<< grid_size , threads_per_block >>> (in_GPU, out_GPU, N);
+     do {
+       
+
+       cudaMemcpy(in_GPU, out_GPU, N, cudaMemcpyDeviceToDevice);
+
+       int numblocks = (int) ((float) (N + threads_per_block - 1) / (float) threads_per_block);
+       int numblocks_y = (int) ((float) (numblocks + max_blocks_per_dimension - 1) / (float) max_blocks_per_dimension);
+       int numblocks_x = (int) ((float) (numblocks + numblocks_y - 1) / (float) numblocks_y);
+       dim3 grid_size2(numblocks_x, numblocks_y, 1);
+       N = numblocks;
+       vector_max_kernel3 <<< grid_size2 , threads_per_block >>> (in_GPU, out_GPU, N);
+
+     } while(N > 1);
+     cudaPrintfDisplay(stdout, true);
+     cudaPrintfEnd();
         break;
     case 4 :
         //LAUNCH KERNEL FROM PROBLEM 4 HERE
